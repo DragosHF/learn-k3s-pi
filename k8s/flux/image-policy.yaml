@@ -7,8 +7,8 @@ spec:
   imageRepositoryRef:
     name: hello-world
   filterTags:
-    pattern: '^\d{14}-[a-f0-9]{8}$'
-    extract: '$1'
+    pattern: '^(?P<ts>\d{14})-[a-f0-9]{8}$'
+    extract: '$ts'
   policy:
-    alphabetical:
+    numerical:
       order: asc
