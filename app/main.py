@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
@@ -31,12 +31,17 @@ with app.app_context():
 
 
 @app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/api/notes")
 def list_notes():
     notes = Note.query.all()
     return jsonify([n.to_dict() for n in notes])
 
 
-@app.route("/notes", methods=["POST"])
+@app.route("/api/notes", methods=["POST"])
 def create_note():
     data = request.get_json()
     if not data or not data.get("title") or not data.get("content"):
@@ -47,7 +52,7 @@ def create_note():
     return jsonify(note.to_dict()), 201
 
 
-@app.route("/notes/<int:note_id>")
+@app.route("/api/notes/<int:note_id>")
 def get_note(note_id):
     note = db.session.get(Note, note_id)
     if not note:
@@ -55,7 +60,7 @@ def get_note(note_id):
     return jsonify(note.to_dict())
 
 
-@app.route("/notes/<int:note_id>", methods=["PUT"])
+@app.route("/api/notes/<int:note_id>", methods=["PUT"])
 def update_note(note_id):
     note = db.session.get(Note, note_id)
     if not note:
@@ -69,7 +74,7 @@ def update_note(note_id):
     return jsonify(note.to_dict())
 
 
-@app.route("/notes/<int:note_id>", methods=["DELETE"])
+@app.route("/api/notes/<int:note_id>", methods=["DELETE"])
 def delete_note(note_id):
     note = db.session.get(Note, note_id)
     if not note:
