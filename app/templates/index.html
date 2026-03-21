@@ -155,6 +155,7 @@
         let editingId = null;
         let selectedDate = null;
         let calYear, calMonth;
+        let notesById = {};
 
         const now = new Date();
         calYear = now.getFullYear();
@@ -231,6 +232,7 @@
                 container.innerHTML = '<div class="empty">No notes yet. Create one above.</div>';
                 return;
             }
+            notesById = Object.fromEntries(notes.map(n => [n.id, n]));
             container.innerHTML = notes.map(n => `
                 <div class="note">
                     <h3>${esc(n.title)}</h3>
@@ -239,8 +241,8 @@
                     </div>
                     <p>${esc(n.content)}</p>
                     <div class="note-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="editNote(${n.id}, ${esc(JSON.stringify(n.title))}, ${esc(JSON.stringify(n.content))})">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteNote(${n.id})">Delete</button>
+                        <button class="btn btn-secondary btn-sm" data-id="${n.id}" data-action="edit">Edit</button>
+                        <button class="btn btn-danger btn-sm" data-id="${n.id}" data-action="delete">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -303,6 +305,18 @@
             d.textContent = s;
             return d.innerHTML;
         }
+
+        document.getElementById('notes').addEventListener('click', function(e) {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const id = Number(btn.dataset.id);
+            if (btn.dataset.action === 'edit') {
+                const n = notesById[id];
+                editNote(n.id, n.title, n.content);
+            } else if (btn.dataset.action === 'delete') {
+                deleteNote(id);
+            }
+        });
 
         renderCalendar();
         loadNotes();
