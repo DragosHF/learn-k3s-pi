@@ -44,7 +44,7 @@ K3s cluster on Pi:                                                       |
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Web frontend |
-| GET | `/api/notes` | List all notes (JSON) |
+| GET | `/api/notes` | List all notes (JSON), supports `?date=YYYY-MM-DD` filter |
 | POST | `/api/notes` | Create a note (`{"title": "...", "content": "..."}`) |
 | GET | `/api/notes/:id` | Get a note |
 | PUT | `/api/notes/:id` | Update a note |
@@ -68,12 +68,12 @@ k8s/
   kustomization.yaml   # Kustomize resource list
   flux/
     image-repository.yaml    # Flux: watch GHCR for new images
-    image-policy.yaml        # Flux: select image tags (git SHA format)
+    image-policy.yaml        # Flux: select image tags (timestamp-sha format)
     image-update-automation.yaml  # Flux: auto-update deployment manifest
 .github/workflows/
   ci.yaml              # PR: build image (no push)
   deploy.yaml          # Merge to master: build and push image to GHCR
-Dockerfile             # Python 3.12 slim + Gunicorn
+Dockerfile             # Python 3.12 slim + uv + Gunicorn
 ```
 
 ## Decisions
@@ -86,6 +86,9 @@ Dockerfile             # Python 3.12 slim + Gunicorn
 - **Branch protection on master**: PRs required with CI status check (`build` job must pass). Admin can bypass approval requirement for solo workflow
 - **No direct pushes to master**: all changes go through PRs
 - **Auto-delete branches** after PR merge
+- **uv** instead of pip for faster Docker builds
+- **Image tags** use `YYYYMMDDHHMMSS-shortsha` format for correct chronological ordering
+- **Flux bootstrap** with `--token-auth` and `--read-write-key` for image automation write access
 
 ## Pi Setup
 
@@ -115,16 +118,20 @@ Export your GitHub personal access token (needs repo permissions):
 export GITHUB_TOKEN=<your-token>
 ```
 
-Bootstrap Flux (include image automation controllers):
+Bootstrap Flux (include image automation controllers, with write access):
 
 ```bash
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
 flux bootstrap github \
   --owner=DragosHF \
   --repository=learn-k3s-pi \
   --branch=master \
   --path=./k8s \
   --personal \
-  --components-extra=image-reflector-controller,image-automation-controller
+  --components-extra=image-reflector-controller,image-automation-controller \
+  --token-auth \
+  --read-write-key
 ```
 
 This will:
@@ -177,21 +184,32 @@ No secrets required for deployment. Flux pulls from GHCR and Git autonomously.
 
 ```bash
 # Create a note
-curl -X POST http://<pi-ip>:30080/notes \
+curl -X POST http://<pi-ip>:30080/api/notes \
   -H "Content-Type: application/json" \
   -d '{"title": "First note", "content": "Hello from K3s!"}'
 
 # List all notes
-curl http://<pi-ip>:30080/
+curl http://<pi-ip>:30080/api/notes
+
+# Filter notes by date
+curl http://<pi-ip>:30080/api/notes?date=2026-03-21
 
 # Get a specific note
 curl http://<pi-ip>:30080/api/notes/1
 
 # Update a note
-curl -X PUT http://<pi-ip>:30080/notes/1 \
+curl -X PUT http://<pi-ip>:30080/api/notes/1 \
   -H "Content-Type: application/json" \
   -d '{"content": "Updated content"}'
 
 # Delete a note
-curl -X DELETE http://<pi-ip>:30080/notes/1
+curl -X DELETE http://<pi-ip>:30080/api/notes/1
 ```
+
+## Web Frontend
+
+The app includes a web UI at `http://<pi-ip>:30080` with:
+
+- Create, edit, and delete notes
+- Timestamps (created/updated) on each note
+- Calendar widget to filter notes by date
