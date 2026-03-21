@@ -59,7 +59,6 @@ app/
 k8s/
   deployment.yaml      # App Deployment (with DB env vars from Secret)
   service.yaml         # App NodePort Service (port 30080)
-  postgres-secret.yaml # DB credentials
   postgres-pvc.yaml    # Persistent storage for DB (1Gi)
   postgres-deployment.yaml  # PostgreSQL Deployment
   postgres-service.yaml     # PostgreSQL ClusterIP Service
@@ -80,7 +79,7 @@ Dockerfile             # Python 3.12 slim + Gunicorn
 - **NodePort on 30080** to avoid conflicts with existing services (22/sshd, 80/ppdl_main, 111/rpcbind, 631/cupsd, 5900/wayvnc)
 - **Flux CD for deployment** instead of SSH — no need to expose the Pi to the internet. Flux runs inside K3s and pulls changes from Git/GHCR
 - **PostgreSQL with PVC** — data persists across pod restarts. ClusterIP service keeps DB internal-only
-- **DB credentials in K8s Secret** — referenced by both PostgreSQL and app pods
+- **DB credentials managed manually** — K8s Secret created directly on the Pi, not stored in Git
 - **Branch protection on master**: PRs required with CI status check (`build` job must pass). Admin can bypass approval requirement for solo workflow
 - **No direct pushes to master**: all changes go through PRs
 - **Auto-delete branches** after PR merge
@@ -129,6 +128,17 @@ This will:
 - Install Flux controllers in the cluster
 - Configure Flux to watch the `k8s/` directory for manifests
 - Commit Flux system manifests to the repo
+
+### 5. Create the database credentials secret
+
+```bash
+sudo k3s kubectl create secret generic postgres-credentials \
+  --from-literal=POSTGRES_DB=notes \
+  --from-literal=POSTGRES_USER=notes \
+  --from-literal=POSTGRES_PASSWORD=your-secure-password
+```
+
+This secret is referenced by both the app and PostgreSQL pods. It is not stored in Git.
 
 ## GitHub Setup
 
