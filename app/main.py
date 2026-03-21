@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
@@ -21,9 +22,18 @@ class Note(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc),
+                           onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
-        return {"id": self.id, "title": self.title, "content": self.content}
+        return {
+            "id": self.id,
+            "title": self.title,
+            "content": self.content,
+            "created_at": self.created_at.isoformat() + "Z",
+            "updated_at": self.updated_at.isoformat() + "Z",
+        }
 
 
 with app.app_context():
@@ -37,7 +47,12 @@ def index():
 
 @app.route("/api/notes")
 def list_notes():
-    notes = Note.query.all()
+    date_str = request.args.get("date")
+    if date_str:
+        date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        notes = Note.query.filter(db.func.date(Note.created_at) == date).all()
+    else:
+        notes = Note.query.order_by(Note.created_at.desc()).all()
     return jsonify([n.to_dict() for n in notes])
 
 
