@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
+  - postgres-pvc.yaml
+  - postgres-deployment.yaml
+  - postgres-service.yaml
   - flux/image-repository.yaml
   - flux/image-policy.yaml
   - flux/image-update-automation.yaml
