@@ -20,6 +20,24 @@ spec:
           image: ghcr.io/dragoshf/learn-k3s-pi:latest # {"$imagepolicy": "flux-system:hello-world"}
           ports:
             - containerPort: 5000
+          env:
+            - name: DB_HOST
+              value: postgresql
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_DB
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
           livenessProbe:
             httpGet:
               path: /health

@@ -1,6 +1,6 @@
 # Learn K3s on a PI
 
-Toy project to learn how to deploy a basic web app on a Raspberry Pi using K3s, Flux CD, and GitHub Actions.
+Toy project to learn how to deploy a web app with a database on a Raspberry Pi using K3s, Flux CD, and GitHub Actions.
 
 ## Architecture
 
@@ -17,25 +17,53 @@ GitHub repo
                                                                          |
                                                               Updates deployment
                                                                          |
-                                                              App live at :30080
+K3s cluster on Pi:                                                       |
+  ┌──────────────────────────────────────────────────────┐               |
+  │  Pod: hello-world (Flask + Gunicorn) <───────────────┼───────────────┘
+  │    └── Env vars from Secret                          │
+  │         │                                            │
+  │         ▼                                            │
+  │  Pod: postgresql                                     │
+  │    └── Data persisted via PVC                        │
+  │                                                      │
+  │  Service: hello-world (NodePort 30080) ──► external  │
+  │  Service: postgresql (ClusterIP) ──► internal only   │
+  └──────────────────────────────────────────────────────┘
 ```
 
-- **Web app**: Python Flask "Hello World" served with Gunicorn
+- **Web app**: Python Flask notes API served with Gunicorn
+- **Database**: PostgreSQL 16 with persistent storage
 - **Container**: Multi-arch Docker image (ARM64) hosted on GitHub Container Registry (GHCR)
 - **Kubernetes**: K3s (single node) on Raspberry Pi, Traefik disabled
 - **Exposure**: NodePort Service on port 30080
 - **CI/CD**: GitHub Actions builds images, Flux CD (GitOps) handles deployment
 - **No SSH required**: Flux runs inside the cluster and pulls updates autonomously
 
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List all notes |
+| POST | `/notes` | Create a note (`{"title": "...", "content": "..."}`) |
+| GET | `/notes/:id` | Get a note |
+| PUT | `/notes/:id` | Update a note |
+| DELETE | `/notes/:id` | Delete a note |
+| GET | `/health` | Health check |
+
 ## Project Structure
 
 ```
 app/
-  main.py              # Flask app (/ and /health endpoints)
+  main.py              # Flask notes API (CRUD + health)
   requirements.txt     # Python dependencies
 k8s/
-  deployment.yaml      # Kubernetes Deployment manifest
-  service.yaml         # Kubernetes NodePort Service (port 30080)
+  deployment.yaml      # App Deployment (with DB env vars from Secret)
+  service.yaml         # App NodePort Service (port 30080)
+  postgres-secret.yaml # DB credentials
+  postgres-pvc.yaml    # Persistent storage for DB (1Gi)
+  postgres-deployment.yaml  # PostgreSQL Deployment
+  postgres-service.yaml     # PostgreSQL ClusterIP Service
+  kustomization.yaml   # Kustomize resource list
   flux/
     image-repository.yaml    # Flux: watch GHCR for new images
     image-policy.yaml        # Flux: select image tags (git SHA format)
@@ -51,8 +79,11 @@ Dockerfile             # Python 3.12 slim + Gunicorn
 - **K3s installed without Traefik** (`--disable traefik`) because port 80 is already in use by `ppdl_main` on the Pi
 - **NodePort on 30080** to avoid conflicts with existing services (22/sshd, 80/ppdl_main, 111/rpcbind, 631/cupsd, 5900/wayvnc)
 - **Flux CD for deployment** instead of SSH — no need to expose the Pi to the internet. Flux runs inside K3s and pulls changes from Git/GHCR
+- **PostgreSQL with PVC** — data persists across pod restarts. ClusterIP service keeps DB internal-only
+- **DB credentials in K8s Secret** — referenced by both PostgreSQL and app pods
 - **Branch protection on master**: PRs required with CI status check (`build` job must pass). Admin can bypass approval requirement for solo workflow
 - **No direct pushes to master**: all changes go through PRs
+- **Auto-delete branches** after PR merge
 
 ## Pi Setup
 
@@ -82,7 +113,7 @@ Export your GitHub personal access token (needs repo permissions):
 export GITHUB_TOKEN=<your-token>
 ```
 
-Bootstrap Flux:
+Bootstrap Flux (include image automation controllers):
 
 ```bash
 flux bootstrap github \
@@ -90,25 +121,14 @@ flux bootstrap github \
   --repository=learn-k3s-pi \
   --branch=master \
   --path=./k8s \
-  --personal
+  --personal \
+  --components-extra=image-reflector-controller,image-automation-controller
 ```
 
 This will:
 - Install Flux controllers in the cluster
 - Configure Flux to watch the `k8s/` directory for manifests
 - Commit Flux system manifests to the repo
-
-### 5. Install Flux image automation controllers
-
-```bash
-flux install --components-extra=image-reflector-controller,image-automation-controller
-```
-
-### 6. Apply the Flux image automation manifests
-
-```bash
-sudo k3s kubectl apply -f k8s/flux/
-```
 
 ## GitHub Setup
 
@@ -139,3 +159,26 @@ No secrets required for deployment. Flux pulls from GHCR and Git autonomously.
 6. GitHub Actions builds and pushes the image to GHCR
 7. Flux detects the new image tag and updates the deployment
 8. Access the app at `http://<pi-ip>:30080`
+
+### Example API Usage
+
+```bash
+# Create a note
+curl -X POST http://<pi-ip>:30080/notes \
+  -H "Content-Type: application/json" \
+  -d '{"title": "First note", "content": "Hello from K3s!"}'
+
+# List all notes
+curl http://<pi-ip>:30080/
+
+# Get a specific note
+curl http://<pi-ip>:30080/notes/1
+
+# Update a note
+curl -X PUT http://<pi-ip>:30080/notes/1 \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Updated content"}'
+
+# Delete a note
+curl -X DELETE http://<pi-ip>:30080/notes/1
+```
