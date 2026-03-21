@@ -8,13 +8,16 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 700px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
             color: #333;
         }
         h1 { margin-bottom: 20px; }
+        .layout { display: flex; gap: 20px; }
+        .sidebar { width: 280px; flex-shrink: 0; }
+        .main { flex: 1; min-width: 0; }
         .form {
             background: #fff;
             padding: 16px;
@@ -42,8 +45,9 @@
         .btn-primary:hover { background: #1d4ed8; }
         .btn-danger { background: #dc2626; color: #fff; }
         .btn-danger:hover { background: #b91c1c; }
-        .btn-secondary { background: #6b7280; color: #fff; margin-left: 4px; }
+        .btn-secondary { background: #6b7280; color: #fff; }
         .btn-secondary:hover { background: #4b5563; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
         .note {
             background: #fff;
             padding: 16px;
@@ -51,31 +55,176 @@
             margin-bottom: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .note h3 { margin-bottom: 6px; }
+        .note h3 { margin-bottom: 4px; }
+        .note-time { font-size: 12px; color: #999; margin-bottom: 8px; }
         .note p { color: #555; margin-bottom: 10px; white-space: pre-wrap; }
         .note-actions { display: flex; gap: 6px; }
         .empty { text-align: center; color: #999; padding: 40px; }
+        .filter-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* Calendar */
+        .calendar {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .cal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .cal-header button {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .cal-header button:hover { background: #f0f0f0; }
+        .cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            text-align: center;
+        }
+        .cal-day-label { font-size: 11px; color: #999; padding: 4px; font-weight: 600; }
+        .cal-day {
+            padding: 6px;
+            font-size: 13px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .cal-day:hover { background: #e5edff; }
+        .cal-day.today { font-weight: 700; border: 1px solid #2563eb; }
+        .cal-day.selected { background: #2563eb; color: #fff; }
+        .cal-day.other-month { color: #ccc; }
+        .cal-day.empty { cursor: default; }
+
+        @media (max-width: 640px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; }
+        }
     </style>
 </head>
 <body>
     <h1>Notes</h1>
 
-    <div class="form">
-        <input type="text" id="title" placeholder="Title">
-        <textarea id="content" placeholder="Content"></textarea>
-        <button class="btn btn-primary" onclick="saveNote()">Add Note</button>
-        <span id="edit-info" style="display:none; margin-left: 10px; color: #666;">
-            Editing note — <a href="#" onclick="cancelEdit(); return false;">cancel</a>
-        </span>
-    </div>
+    <div class="layout">
+        <div class="main">
+            <div class="form">
+                <input type="text" id="title" placeholder="Title">
+                <textarea id="content" placeholder="Content"></textarea>
+                <button class="btn btn-primary" onclick="saveNote()">Add Note</button>
+                <span id="edit-info" style="display:none; margin-left: 10px; color: #666;">
+                    Editing note — <a href="#" onclick="cancelEdit(); return false;">cancel</a>
+                </span>
+            </div>
 
-    <div id="notes"></div>
+            <div id="filter-info" class="filter-info" style="display:none;">
+                <span id="filter-text"></span>
+                <button class="btn btn-secondary btn-sm" onclick="clearFilter()">Show all</button>
+            </div>
+
+            <div id="notes"></div>
+        </div>
+
+        <div class="sidebar">
+            <div class="calendar">
+                <div class="cal-header">
+                    <button onclick="changeMonth(-1)">&lt;</button>
+                    <span id="cal-title"></span>
+                    <button onclick="changeMonth(1)">&gt;</button>
+                </div>
+                <div class="cal-grid" id="cal-grid"></div>
+            </div>
+        </div>
+    </div>
 
     <script>
         let editingId = null;
+        let selectedDate = null;
+        let calYear, calMonth;
 
-        async function loadNotes() {
-            const res = await fetch('/api/notes');
+        const now = new Date();
+        calYear = now.getFullYear();
+        calMonth = now.getMonth();
+
+        function renderCalendar() {
+            const months = ['January','February','March','April','May','June',
+                           'July','August','September','October','November','December'];
+            document.getElementById('cal-title').textContent = `${months[calMonth]} ${calYear}`;
+
+            const grid = document.getElementById('cal-grid');
+            const labels = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+            let html = labels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
+
+            const firstDay = new Date(calYear, calMonth, 1);
+            let startDay = firstDay.getDay() - 1;
+            if (startDay < 0) startDay = 6;
+
+            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+            const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+            for (let i = 0; i < startDay; i++) {
+                html += `<div class="cal-day other-month">${daysInPrev - startDay + 1 + i}</div>`;
+            }
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                let cls = 'cal-day';
+                if (dateStr === todayStr) cls += ' today';
+                if (dateStr === selectedDate) cls += ' selected';
+                html += `<div class="${cls}" onclick="selectDate('${dateStr}')">${d}</div>`;
+            }
+
+            const totalCells = startDay + daysInMonth;
+            const remaining = (7 - totalCells % 7) % 7;
+            for (let i = 1; i <= remaining; i++) {
+                html += `<div class="cal-day other-month">${i}</div>`;
+            }
+
+            grid.innerHTML = html;
+        }
+
+        function changeMonth(delta) {
+            calMonth += delta;
+            if (calMonth < 0) { calMonth = 11; calYear--; }
+            if (calMonth > 11) { calMonth = 0; calYear++; }
+            renderCalendar();
+        }
+
+        function selectDate(dateStr) {
+            selectedDate = dateStr;
+            renderCalendar();
+            loadNotes(dateStr);
+            document.getElementById('filter-info').style.display = 'flex';
+            document.getElementById('filter-text').textContent = `Showing notes from ${dateStr}`;
+        }
+
+        function clearFilter() {
+            selectedDate = null;
+            renderCalendar();
+            loadNotes();
+            document.getElementById('filter-info').style.display = 'none';
+        }
+
+        async function loadNotes(date) {
+            const url = date ? `/api/notes?date=${date}` : '/api/notes';
+            const res = await fetch(url);
             const notes = await res.json();
             const container = document.getElementById('notes');
             if (notes.length === 0) {
@@ -85,13 +234,21 @@
             container.innerHTML = notes.map(n => `
                 <div class="note">
                     <h3>${esc(n.title)}</h3>
+                    <div class="note-time">
+                        Created ${formatDate(n.created_at)}${n.updated_at !== n.created_at ? ' &middot; Updated ' + formatDate(n.updated_at) : ''}
+                    </div>
                     <p>${esc(n.content)}</p>
                     <div class="note-actions">
-                        <button class="btn btn-secondary" onclick="editNote(${n.id}, ${esc(JSON.stringify(n.title))}, ${esc(JSON.stringify(n.content))})">Edit</button>
-                        <button class="btn btn-danger" onclick="deleteNote(${n.id})">Delete</button>
+                        <button class="btn btn-secondary btn-sm" onclick="editNote(${n.id}, ${esc(JSON.stringify(n.title))}, ${esc(JSON.stringify(n.content))})">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteNote(${n.id})">Delete</button>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function formatDate(iso) {
+            const d = new Date(iso);
+            return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
 
         async function saveNote() {
@@ -116,7 +273,7 @@
 
             document.getElementById('title').value = '';
             document.getElementById('content').value = '';
-            loadNotes();
+            loadNotes(selectedDate);
         }
 
         function editNote(id, title, content) {
@@ -138,7 +295,7 @@
         async function deleteNote(id) {
             if (!confirm('Delete this note?')) return;
             await fetch(`/api/notes/${id}`, {method: 'DELETE'});
-            loadNotes();
+            loadNotes(selectedDate);
         }
 
         function esc(s) {
@@ -147,6 +304,7 @@
             return d.innerHTML;
         }
 
+        renderCalendar();
         loadNotes();
     </script>
 </body>
