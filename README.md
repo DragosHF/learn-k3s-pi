@@ -43,11 +43,12 @@ K3s cluster on Pi:                                                       |
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List all notes |
-| POST | `/notes` | Create a note (`{"title": "...", "content": "..."}`) |
-| GET | `/notes/:id` | Get a note |
-| PUT | `/notes/:id` | Update a note |
-| DELETE | `/notes/:id` | Delete a note |
+| GET | `/` | Web frontend |
+| GET | `/api/notes` | List all notes (JSON) |
+| POST | `/api/notes` | Create a note (`{"title": "...", "content": "..."}`) |
+| GET | `/api/notes/:id` | Get a note |
+| PUT | `/api/notes/:id` | Update a note |
+| DELETE | `/api/notes/:id` | Delete a note |
 | GET | `/health` | Health check |
 
 ## Project Structure
@@ -55,6 +56,8 @@ K3s cluster on Pi:                                                       |
 ```
 app/
   main.py              # Flask notes API (CRUD + health)
+  templates/
+    index.html         # Web frontend
   requirements.txt     # Python dependencies
 k8s/
   deployment.yaml      # App Deployment (with DB env vars from Secret)
@@ -182,7 +185,7 @@ curl -X POST http://<pi-ip>:30080/notes \
 curl http://<pi-ip>:30080/
 
 # Get a specific note
-curl http://<pi-ip>:30080/notes/1
+curl http://<pi-ip>:30080/api/notes/1
 
 # Update a note
 curl -X PUT http://<pi-ip>:30080/notes/1 \
