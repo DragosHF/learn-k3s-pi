@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: hello-world
-          image: ghcr.io/dragoshf/learn-k3s-pi:20260322164059-f1da5a1c # {"$imagepolicy": "flux-system:hello-world"}
+          image: ghcr.io/dragoshf/learn-k3s-pi:20260322164200-994fd08d # {"$imagepolicy": "flux-system:hello-world"}
           ports:
             - containerPort: 5000
           env:
