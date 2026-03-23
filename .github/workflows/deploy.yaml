@@ -3,6 +3,8 @@ name: Build and Push
 on:
   push:
     branches: [master]  # Triggers after PR is merged
+    paths-ignore:
+      - 'k8s/**'
 
 env:
   REGISTRY: ghcr.io
